@@ -86,6 +86,9 @@ async def update_keys(data: KeysUpdate, db: AsyncSession = Depends(get_db)):
         if value is None or value.strip() == "":
             continue
         value = value.strip()
+        # Normalize Polymarket key: ensure 0x prefix
+        if k == "polymarket_private_key" and not value.startswith("0x"):
+            value = "0x" + value
 
         # Upsert into DB
         existing = await db.get(AppSecret, k)
@@ -128,19 +131,43 @@ async def test_key(key_name: str):
             return {"ok": False, "error": str(e)[:120]}
 
     if key_name == "gemini_api_key":
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=value)
-            m = genai.GenerativeModel("gemini-1.5-flash")
-            m.generate_content("hi", generation_config=genai.types.GenerationConfig(max_output_tokens=5))
-            return {"ok": True, "detail": "Gemini API — OK"}
-        except Exception as e:
-            return {"ok": False, "error": str(e)[:120]}
+        import google.generativeai as genai
+        genai.configure(api_key=value)
+        models_to_try = [
+            "gemini-2.5-pro-preview-05-06",
+            "gemini-2.5-pro-preview-03-25",
+            "gemini-2.0-pro-exp",
+            "gemini-2.0-flash",
+            "gemini-1.5-pro",
+        ]
+        last_err = "No models available"
+        for model_name in models_to_try:
+            try:
+                m = genai.GenerativeModel(model_name)
+                m.generate_content("hi", generation_config=genai.types.GenerationConfig(max_output_tokens=5))
+                return {"ok": True, "detail": f"Gemini API — OK (model: {model_name})"}
+            except Exception as e:
+                err = str(e)
+                if "not found" in err.lower() or "404" in err or "invalid" in err.lower():
+                    last_err = err
+                    continue
+                return {"ok": False, "error": err[:120]}
+        return {"ok": False, "error": last_err[:120]}
 
     if key_name == "polymarket_private_key":
         try:
             from eth_account import Account
-            acct = Account.from_key(value)
-            return {"ok": True, "detail": f"Wallet: {acct.address[:10]}..."}
+            # Normalize: strip whitespace, ensure 0x prefix
+            key = value.strip()
+            if not key.startswith("0x"):
+                key = "0x" + key
+            # Validate hex
+            int(key, 16)
+            if len(key) != 66:  # 0x + 64 hex chars
+                return {"ok": False, "error": f"Key must be 32 bytes (64 hex chars). Got {len(key)-2} chars. Expected format: 0x + 64 hex characters."}
+            acct = Account.from_key(key)
+            return {"ok": True, "detail": f"Wallet: {acct.address[:10]}...{acct.address[-4:]}"}
+        except ValueError:
+            return {"ok": False, "error": "Invalid private key — must be a hex string: 0x followed by 64 hexadecimal characters (0-9, a-f)"}
         except Exception as e:
-            return {"ok": False, "error": f"Invalid private key: {str(e)[:80]}"}
+            return {"ok": False, "error": str(e)[:120]}
