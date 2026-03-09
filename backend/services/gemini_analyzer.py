@@ -1,11 +1,9 @@
 import google.generativeai as genai
 import json
 import logging
-from config import settings
+from config import get_secret
 
 logger = logging.getLogger(__name__)
-genai.configure(api_key=settings.gemini_api_key)
-model = genai.GenerativeModel("gemini-1.5-pro")
 
 SYSTEM_PROMPT = """You are an expert prediction market analyst with deep knowledge of:
 - Political science, economics, geopolitics
@@ -44,6 +42,13 @@ Respond ONLY with this JSON:
 
 async def analyze_market(market: dict) -> dict:
     """Analyze a market using Gemini and return probability estimate."""
+    api_key = get_secret("gemini_api_key")
+    if not api_key:
+        return {"success": False, "error": "Gemini API key not configured"}
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-pro")
+
     prompt = SYSTEM_PROMPT + "\n\n" + ANALYSIS_PROMPT.format(
         question=market["question"],
         description=market.get("description", "No description provided"),
@@ -63,7 +68,6 @@ async def analyze_market(market: dict) -> dict:
         )
         raw = response.text.strip()
 
-        # Extract JSON if wrapped in markdown
         if "```" in raw:
             parts = raw.split("```")
             for part in parts:

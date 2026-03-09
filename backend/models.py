@@ -124,6 +124,15 @@ class Bet(Base):
     resolved_at = Column(DateTime)
 
 
+class AppSecret(Base):
+    """API keys and secrets stored in DB (overrides env vars)."""
+    __tablename__ = "app_secrets"
+
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class ScanRun(Base):
     """Log of every scan execution."""
     __tablename__ = "scan_runs"

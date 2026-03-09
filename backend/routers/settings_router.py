@@ -1,8 +1,23 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from config import settings
+from sqlalchemy.ext.asyncio import AsyncSession
+from config import settings, _secrets
+import config
+
+from database import get_db
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+# Names of secrets manageable via UI
+SECRET_KEYS = ["anthropic_api_key", "gemini_api_key", "polymarket_private_key"]
+
+
+def _mask(value: str | None) -> str | None:
+    if not value:
+        return None
+    if len(value) <= 12:
+        return "***"
+    return value[:8] + "..." + value[-4:]
 
 
 class SettingsUpdate(BaseModel):
@@ -12,6 +27,12 @@ class SettingsUpdate(BaseModel):
     bankroll_usdc: float | None = None
     auto_bet_enabled: bool | None = None
     scan_interval_minutes: int | None = None
+
+
+class KeysUpdate(BaseModel):
+    anthropic_api_key: str | None = None
+    gemini_api_key: str | None = None
+    polymarket_private_key: str | None = None
 
 
 @router.get("")
@@ -28,7 +49,6 @@ async def get_settings():
 
 @router.patch("")
 async def update_settings(data: SettingsUpdate):
-    """Update runtime settings (persists until restart)."""
     if data.max_bet_usdc is not None:
         settings.max_bet_usdc = data.max_bet_usdc
     if data.min_edge is not None:
@@ -42,3 +62,41 @@ async def update_settings(data: SettingsUpdate):
     if data.scan_interval_minutes is not None:
         settings.scan_interval_minutes = data.scan_interval_minutes
     return {"updated": True, **data.model_dump(exclude_none=True)}
+
+
+@router.get("/keys")
+async def get_keys():
+    """Return masked versions of stored API keys."""
+    result = {}
+    for k in SECRET_KEYS:
+        value = config.get_secret(k)
+        result[k] = _mask(value)
+    return result
+
+
+@router.patch("/keys")
+async def update_keys(data: KeysUpdate, db: AsyncSession = Depends(get_db)):
+    """Save API keys to DB and update runtime store."""
+    from models import AppSecret
+    from sqlalchemy import select
+
+    updated = []
+    for k in SECRET_KEYS:
+        value = getattr(data, k)
+        if value is None or value.strip() == "":
+            continue
+        value = value.strip()
+
+        # Upsert into DB
+        existing = await db.get(AppSecret, k)
+        if existing:
+            existing.value = value
+        else:
+            db.add(AppSecret(key=k, value=value))
+
+        # Update runtime store immediately
+        config._secrets[k] = value
+        updated.append(k)
+
+    await db.commit()
+    return {"updated": updated}

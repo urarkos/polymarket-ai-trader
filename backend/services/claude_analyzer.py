@@ -1,10 +1,9 @@
 import anthropic
 import json
 import logging
-from config import settings
+from config import get_secret
 
 logger = logging.getLogger(__name__)
-client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 SYSTEM_PROMPT = """You are an expert prediction market analyst with deep knowledge of:
 - Political science, economics, geopolitics
@@ -47,6 +46,12 @@ Respond ONLY with this JSON:
 
 async def analyze_market(market: dict) -> dict:
     """Analyze a market using Claude and return probability estimate."""
+    api_key = get_secret("anthropic_api_key")
+    if not api_key:
+        return {"success": False, "error": "Anthropic API key not configured"}
+
+    client = anthropic.Anthropic(api_key=api_key)
+
     prompt = ANALYSIS_PROMPT.format(
         question=market["question"],
         description=market.get("description", "No description provided"),
@@ -65,7 +70,6 @@ async def analyze_market(market: dict) -> dict:
         )
         raw = message.content[0].text.strip()
 
-        # Extract JSON if wrapped in markdown
         if "```" in raw:
             raw = raw.split("```")[1]
             if raw.startswith("json"):

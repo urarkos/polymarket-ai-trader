@@ -29,4 +29,9 @@ export const api = {
   getSettings: () => req('/settings'),
   updateSettings: (data) =>
     req('/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // API Keys
+  getKeys: () => req('/settings/keys'),
+  updateKeys: (data) =>
+    req('/settings/keys', { method: 'PATCH', body: JSON.stringify(data) }),
 }

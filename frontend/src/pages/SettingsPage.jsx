@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { Card } from '../components/Card'
-import { Shield, AlertTriangle, Save } from 'lucide-react'
+import { Shield, AlertTriangle, Save, Key, Eye, EyeOff, CheckCircle } from 'lucide-react'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null)
@@ -9,11 +9,19 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const [keys, setKeys] = useState({})
+  const [keyForm, setKeyForm] = useState({
+    anthropic_api_key: '',
+    gemini_api_key: '',
+    polymarket_private_key: '',
+  })
+  const [showKeys, setShowKeys] = useState({})
+  const [savingKeys, setSavingKeys] = useState(false)
+  const [savedKeys, setSavedKeys] = useState(false)
+
   useEffect(() => {
-    api.getSettings().then((s) => {
-      setSettings(s)
-      setForm(s)
-    })
+    api.getSettings().then((s) => { setSettings(s); setForm(s) })
+    api.getKeys().then(setKeys)
   }, [])
 
   function set(key, value) {
@@ -28,9 +36,31 @@ export default function SettingsPage() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      alert(`Save failed: ${e.message}`)
+      alert('Save failed: ' + e.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveKeys() {
+    const payload = {}
+    for (const [k, v] of Object.entries(keyForm)) {
+      if (v.trim()) payload[k] = v.trim()
+    }
+    if (Object.keys(payload).length === 0) return
+
+    setSavingKeys(true)
+    try {
+      await api.updateKeys(payload)
+      const fresh = await api.getKeys()
+      setKeys(fresh)
+      setKeyForm({ anthropic_api_key: '', gemini_api_key: '', polymarket_private_key: '' })
+      setSavedKeys(true)
+      setTimeout(() => setSavedKeys(false), 2500)
+    } catch (e) {
+      alert('Failed to save keys: ' + e.message)
+    } finally {
+      setSavingKeys(false)
     }
   }
 
@@ -40,7 +70,6 @@ export default function SettingsPage() {
     <div className="p-6 max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold text-white">Settings</h1>
 
-      {/* Risk warning */}
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex gap-3">
         <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-yellow-200">
@@ -52,12 +81,71 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* API Keys */}
+      <Card className="space-y-5">
+        <div className="flex items-center gap-2">
+          <Key className="w-5 h-5 text-blue-400" />
+          <h2 className="font-semibold text-white">API Keys</h2>
+        </div>
+        <p className="text-xs text-gray-500 -mt-2">
+          Keys are stored securely in the database. Leave blank to keep the existing value.
+        </p>
+
+        <KeyField
+          label="Anthropic API Key"
+          placeholder="sk-ant-..."
+          current={keys.anthropic_api_key}
+          value={keyForm.anthropic_api_key}
+          show={showKeys.anthropic_api_key}
+          onToggleShow={() => setShowKeys(s => ({ ...s, anthropic_api_key: !s.anthropic_api_key }))}
+          onChange={(v) => setKeyForm(f => ({ ...f, anthropic_api_key: v }))}
+        />
+
+        <KeyField
+          label="Gemini API Key"
+          placeholder="AIza..."
+          current={keys.gemini_api_key}
+          value={keyForm.gemini_api_key}
+          show={showKeys.gemini_api_key}
+          onToggleShow={() => setShowKeys(s => ({ ...s, gemini_api_key: !s.gemini_api_key }))}
+          onChange={(v) => setKeyForm(f => ({ ...f, gemini_api_key: v }))}
+        />
+
+        <KeyField
+          label="Polymarket Private Key"
+          placeholder="0x..."
+          current={keys.polymarket_private_key}
+          value={keyForm.polymarket_private_key}
+          show={showKeys.polymarket_private_key}
+          onToggleShow={() => setShowKeys(s => ({ ...s, polymarket_private_key: !s.polymarket_private_key }))}
+          onChange={(v) => setKeyForm(f => ({ ...f, polymarket_private_key: v }))}
+        />
+
+        <div className="flex items-center justify-between pt-1">
+          <div className="text-xs">
+            {savedKeys && (
+              <span className="flex items-center gap-1 text-green-400">
+                <CheckCircle className="w-3.5 h-3.5" /> Keys saved successfully
+              </span>
+            )}
+          </div>
+          <button
+            onClick={saveKeys}
+            disabled={savingKeys || !Object.values(keyForm).some(v => v.trim())}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+          >
+            <Save className="w-4 h-4" />
+            {savingKeys ? 'Saving...' : 'Save Keys'}
+          </button>
+        </div>
+      </Card>
+
       {/* Auto-bet toggle */}
       <Card>
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <Shield className={`w-5 h-5 ${form.auto_bet_enabled ? 'text-green-400' : 'text-gray-500'}`} />
+              <Shield className={"w-5 h-5 " + (form.auto_bet_enabled ? 'text-green-400' : 'text-gray-500')} />
               <h2 className="font-semibold text-white">Auto-Bet</h2>
             </div>
             <p className="text-xs text-gray-500 mt-1">
@@ -66,13 +154,9 @@ export default function SettingsPage() {
           </div>
           <button
             onClick={() => set('auto_bet_enabled', !form.auto_bet_enabled)}
-            className={`relative w-12 h-6 rounded-full transition-colors ${
-              form.auto_bet_enabled ? 'bg-green-500' : 'bg-gray-700'
-            }`}
+            className={"relative w-12 h-6 rounded-full transition-colors " + (form.auto_bet_enabled ? 'bg-green-500' : 'bg-gray-700')}
           >
-            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
-              form.auto_bet_enabled ? 'left-7' : 'left-1'
-            }`} />
+            <span className={"absolute top-1 w-4 h-4 bg-white rounded-full transition-all " + (form.auto_bet_enabled ? 'left-7' : 'left-1')} />
           </button>
         </div>
       </Card>
@@ -88,7 +172,6 @@ export default function SettingsPage() {
           onChange={(v) => set('bankroll_usdc', v)}
           min={10} max={100000} step={10}
         />
-
         <NumberField
           label="Max Bet per Trade (USDC)"
           help="Hard cap on any single bet regardless of Kelly output"
@@ -96,7 +179,6 @@ export default function SettingsPage() {
           onChange={(v) => set('max_bet_usdc', v)}
           min={1} max={10000} step={1}
         />
-
         <NumberField
           label="Minimum Edge (%)"
           help="Skip markets where AI edge is smaller than this threshold"
@@ -105,7 +187,6 @@ export default function SettingsPage() {
           min={1} max={50} step={0.5}
           suffix="%"
         />
-
         <NumberField
           label="Kelly Fraction (%)"
           help="Fraction of full Kelly to use. 25% is standard conservative sizing."
@@ -114,7 +195,6 @@ export default function SettingsPage() {
           min={5} max={100} step={5}
           suffix="%"
         />
-
         <NumberField
           label="Scan Interval (minutes)"
           help="How often to automatically scan markets for opportunities"
@@ -125,7 +205,6 @@ export default function SettingsPage() {
         />
       </Card>
 
-      {/* Save */}
       <div className="flex justify-end">
         <button
           onClick={save}
@@ -135,6 +214,35 @@ export default function SettingsPage() {
           <Save className="w-4 h-4" />
           {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Settings'}
         </button>
+      </div>
+    </div>
+  )
+}
+
+function KeyField({ label, placeholder, current, value, show, onToggleShow, onChange }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-300">{label}</label>
+      {current && (
+        <p className="text-xs text-green-400/80 mt-0.5 font-mono">Current: {current}</p>
+      )}
+      <div className="flex items-center gap-2 mt-1.5">
+        <div className="relative flex-1">
+          <input
+            type={show ? 'text' : 'password'}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={current ? 'Enter new value to replace...' : placeholder}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 pr-10 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500"
+          />
+          <button
+            type="button"
+            onClick={onToggleShow}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+          >
+            {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
     </div>
   )
