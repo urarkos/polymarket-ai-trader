@@ -148,7 +148,9 @@ async def test_key(key_name: str):
                 return {"ok": True, "detail": f"Gemini API — OK (model: {model_name})"}
             except Exception as e:
                 err = str(e)
-                if "not found" in err.lower() or "404" in err or "invalid" in err.lower():
+                if "429" in err or "quota" in err.lower() or "resource_exhausted" in err.lower():
+                    return {"ok": True, "detail": f"Key valid ✓ — free tier quota exceeded ({model_name}). Add billing at aistudio.google.com to unlock."}
+                if "not found" in err.lower() or "404" in err:
                     last_err = err
                     continue
                 return {"ok": False, "error": err[:120]}
@@ -157,17 +159,21 @@ async def test_key(key_name: str):
     if key_name == "polymarket_private_key":
         try:
             from eth_account import Account
-            # Normalize: strip whitespace, ensure 0x prefix
             key = value.strip()
             if not key.startswith("0x"):
                 key = "0x" + key
-            # Validate hex
-            int(key, 16)
-            if len(key) != 66:  # 0x + 64 hex chars
-                return {"ok": False, "error": f"Key must be 32 bytes (64 hex chars). Got {len(key)-2} chars. Expected format: 0x + 64 hex characters."}
+            hex_part = key[2:]
+            # Pad to 64 chars if leading zeros were stripped (some exporters do this)
+            if len(hex_part) < 64:
+                hex_part = hex_part.zfill(64)
+                key = "0x" + hex_part
+            if len(hex_part) == 40:
+                return {"ok": False, "error": "This looks like a wallet address (20 bytes), not a private key (32 bytes). Export the private key from your wallet app."}
+            if len(hex_part) != 64:
+                return {"ok": False, "error": f"Expected 64 hex chars (32 bytes), got {len(hex_part)}. Export the private key from your wallet — not the address."}
             acct = Account.from_key(key)
             return {"ok": True, "detail": f"Wallet: {acct.address[:10]}...{acct.address[-4:]}"}
         except ValueError:
-            return {"ok": False, "error": "Invalid private key — must be a hex string: 0x followed by 64 hexadecimal characters (0-9, a-f)"}
+            return {"ok": False, "error": "Invalid private key — must be 64 hexadecimal characters (0-9, a-f). Not a seed phrase or address."}
         except Exception as e:
             return {"ok": False, "error": str(e)[:120]}
