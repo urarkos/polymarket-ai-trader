@@ -5,47 +5,63 @@ from config import get_secret
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an expert prediction market analyst with deep knowledge of:
-- Political science, economics, geopolitics
-- Statistics and probability theory
-- Current world events (up to your knowledge cutoff)
-- Market psychology and crowd behavior
+SYSTEM_PROMPT = """You are a world-class prediction market analyst and probabilistic forecaster.
+Your analysis must be rigorous, calibrated, and actionable.
 
-Your task: analyze prediction market questions and estimate the TRUE probability of the YES outcome.
-Be calibrated — if you're uncertain, reflect that in your probability estimate.
-Consider base rates, recent trends, and any relevant context.
+Core principles:
+- NEVER anchor to the current market price — form your own independent probability estimate first
+- Apply proper base rates before updating on specific evidence
+- Consider what sophisticated market participants might be missing or mispricing
+- Be explicit about your uncertainty and the key cruxes of the question
+- Think carefully about resolution criteria and edge cases
 
-ALWAYS respond with valid JSON only."""
+You have deep expertise in:
+- Political science, electoral systems, and geopolitics
+- Economics, monetary policy, and market dynamics
+- Statistics, Bayesian reasoning, and forecasting methodology
+- Current world events and historical base rates
+- Crowd psychology and prediction market microstructure
 
-ANALYSIS_PROMPT = """Analyze this prediction market:
+ALWAYS respond with valid JSON only. No markdown, no explanations outside the JSON."""
 
+ANALYSIS_PROMPT = """Analyze this prediction market with deep rigor:
+
+═══ MARKET DATA ═══
 Question: {question}
 Description: {description}
 Category: {category}
-Current market price (YES): {yes_price:.1%}
-Current market price (NO): {no_price:.1%}
-Market ends: {end_date}
+Current market price YES: {yes_price:.1%}
+Current market price NO:  {no_price:.1%}
+Market resolves: {end_date}
+24h Volume: {volume_24h}
+Liquidity: {liquidity}
 
-Provide:
-1. Your estimated probability for YES outcome (0.0 to 1.0)
-2. Key factors supporting YES
-3. Key factors supporting NO
-4. Your confidence level (HIGH/MEDIUM/LOW)
-5. Brief reasoning summary
+═══ YOUR TASK ═══
+Step 1 — BASE RATE: What is the historical base rate for this type of question IGNORING the specific context?
+Step 2 — SPECIFIC EVIDENCE: What specific factors update you away from the base rate?
+Step 3 — MARKET EFFICIENCY CHECK: Why might the market be mispriced at {yes_price:.1%}? What might sophisticated traders be missing?
+Step 4 — RESOLUTION RISK: Are there ambiguity or edge cases in how this resolves?
+Step 5 — FINAL ESTIMATE: What is your calibrated probability?
 
-Respond ONLY with this JSON:
+Respond ONLY with this JSON structure:
 {{
-  "probability_yes": 0.XX,
-  "confidence": "HIGH|MEDIUM|LOW",
-  "factors_yes": ["factor1", "factor2"],
-  "factors_no": ["factor1", "factor2"],
-  "reasoning": "concise 2-3 sentence analysis",
-  "data_quality": "note if information is limited or outdated"
+  "probability_yes": <float 0.0-1.0>,
+  "confidence": "<HIGH|MEDIUM|LOW>",
+  "base_rate": <float 0.0-1.0>,
+  "base_rate_rationale": "<brief explanation of the reference class>",
+  "factors_yes": ["<specific factor>", "<specific factor>", "<specific factor>"],
+  "factors_no": ["<specific factor>", "<specific factor>", "<specific factor>"],
+  "key_uncertainty": "<the single most important unknown that could swing this>",
+  "market_mispricing_hypothesis": "<why might the crowd be wrong at {yes_price:.1%}?>",
+  "resolution_risks": "<any ambiguity in resolution criteria>",
+  "reasoning": "<3-5 sentence synthesis of your full analysis>",
+  "confidence_interval_low": <float — pessimistic scenario probability>,
+  "confidence_interval_high": <float — optimistic scenario probability>
 }}"""
 
 
 async def analyze_market(market: dict) -> dict:
-    """Analyze a market using Claude and return probability estimate."""
+    """Analyze a market using Claude Opus with extended thinking."""
     api_key = get_secret("anthropic_api_key")
     if not api_key:
         return {"success": False, "error": "Anthropic API key not configured"}
@@ -54,35 +70,66 @@ async def analyze_market(market: dict) -> dict:
 
     prompt = ANALYSIS_PROMPT.format(
         question=market["question"],
-        description=market.get("description", "No description provided"),
+        description=market.get("description", "No additional description provided."),
         category=market.get("category", "General"),
         yes_price=market["yes_price"],
         no_price=market["no_price"],
         end_date=market.get("end_date", "Unknown"),
+        volume_24h=f"${market.get('volume_24h', 0):,.0f}" if market.get("volume_24h") else "N/A",
+        liquidity=f"${market.get('liquidity', 0):,.0f}" if market.get("liquidity") else "N/A",
     )
 
-    try:
-        message = client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=1024,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = message.content[0].text.strip()
+    # Try with extended thinking first (deeper reasoning), fall back without it
+    for use_thinking in (True, False):
+        try:
+            kwargs = dict(
+                model="claude-opus-4-6",
+                max_tokens=16000,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            if use_thinking:
+                kwargs["thinking"] = {"type": "enabled", "budget_tokens": 10000}
+                kwargs["betas"] = ["interleaved-thinking-2025-05-14"]
 
-        if "```" in raw:
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
+            message = client.messages.create(**kwargs)
 
-        result = json.loads(raw)
-        result["model"] = "claude-opus-4-6"
-        result["success"] = True
-        return result
+            # Extract text content (skip thinking blocks)
+            raw = ""
+            for block in message.content:
+                if block.type == "text":
+                    raw = block.text.strip()
+                    break
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Claude returned invalid JSON: {e}")
-        return {"success": False, "error": f"JSON parse error: {e}"}
-    except Exception as e:
-        logger.error(f"Claude analysis failed: {e}")
-        return {"success": False, "error": str(e)}
+            if not raw:
+                continue
+
+            # Strip markdown fences if present
+            if "```" in raw:
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+
+            result = json.loads(raw)
+            result["model"] = "claude-opus-4-6"
+            result["extended_thinking"] = use_thinking
+            result["success"] = True
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Claude returned invalid JSON: {e}\nRaw: {raw[:200]}")
+            if not use_thinking:
+                return {"success": False, "error": f"JSON parse error: {e}"}
+        except anthropic.BadRequestError:
+            # Model doesn't support extended thinking in this config, retry without
+            if use_thinking:
+                logger.warning("Extended thinking not available, retrying without")
+                continue
+            return {"success": False, "error": "Bad request to Anthropic API"}
+        except Exception as e:
+            logger.error(f"Claude analysis failed: {e}")
+            if not use_thinking:
+                return {"success": False, "error": str(e)}
+
+    return {"success": False, "error": "All Claude attempts failed"}
