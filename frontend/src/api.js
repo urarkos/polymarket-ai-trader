@@ -48,4 +48,6 @@ export const api = {
   getKeys: () => req('/settings/keys'),
   updateKeys: (data) =>
     req('/settings/keys', { method: 'PATCH', body: JSON.stringify(data) }),
+  testKey: (name) =>
+    req(`/settings/keys/test/${name}`, { method: 'POST' }),
 }

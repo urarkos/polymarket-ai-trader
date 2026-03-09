@@ -100,3 +100,47 @@ async def update_keys(data: KeysUpdate, db: AsyncSession = Depends(get_db)):
 
     await db.commit()
     return {"updated": updated}
+
+
+@router.post("/keys/test/{key_name}")
+async def test_key(key_name: str):
+    """Test that a stored API key is valid by making a minimal real call."""
+    from config import get_secret
+
+    if key_name not in SECRET_KEYS:
+        return {"ok": False, "error": "Unknown key"}
+
+    value = get_secret(key_name)
+    if not value:
+        return {"ok": False, "error": "Key not set"}
+
+    if key_name == "anthropic_api_key":
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=value)
+            client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=10,
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            return {"ok": True, "detail": "Anthropic API — OK"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:120]}
+
+    if key_name == "gemini_api_key":
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=value)
+            m = genai.GenerativeModel("gemini-1.5-flash")
+            m.generate_content("hi", generation_config=genai.types.GenerationConfig(max_output_tokens=5))
+            return {"ok": True, "detail": "Gemini API — OK"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:120]}
+
+    if key_name == "polymarket_private_key":
+        try:
+            from eth_account import Account
+            acct = Account.from_key(value)
+            return {"ok": True, "detail": f"Wallet: {acct.address[:10]}..."}
+        except Exception as e:
+            return {"ok": False, "error": f"Invalid private key: {str(e)[:80]}"}
