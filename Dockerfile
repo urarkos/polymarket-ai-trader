@@ -24,5 +24,6 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 WORKDIR /app/backend
 EXPOSE 8000
-# Shell form so $PORT env var is expanded by Railway
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Use start script for reliable PORT expansion
+COPY --chmod=755 start.sh ./start.sh
+CMD ["./start.sh"]
