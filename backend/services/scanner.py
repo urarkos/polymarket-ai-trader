@@ -12,8 +12,7 @@ from datetime import datetime, timedelta
 from config import settings
 from services.polymarket import get_active_markets, place_market_order
 from services.claude_analyzer import analyze_market as claude_analyze
-from services.gemini_analyzer import analyze_market as gemini_analyze
-from services.kelly import kelly_bet, confidence_multiplier, calculate_consensus
+from services.kelly import kelly_bet, confidence_multiplier
 from database import AsyncSessionLocal
 from models import MarketSnapshot, AIAnalysis, Signal, Opportunity, Bet, ScanRun
 
@@ -79,12 +78,9 @@ async def _save_signal(signal_data: dict) -> str:
             no_price=signal_data.get("no_price"),
             market_price=signal_data["current_price"],
             claude_probability=signal_data.get("claude_probability"),
-            gemini_probability=signal_data.get("gemini_probability"),
             consensus_probability=signal_data.get("consensus_probability"),
             claude_confidence=signal_data.get("claude_confidence"),
-            gemini_confidence=signal_data.get("gemini_confidence"),
             consensus_confidence=signal_data.get("confidence"),
-            ai_agreement=signal_data.get("agreement"),
             edge=signal_data.get("edge", 0),
             kelly_full=signal_data.get("kelly_details", {}).get("kelly_full"),
             kelly_bet_usdc=signal_data.get("kelly_bet_usdc", 0),
@@ -105,12 +101,10 @@ async def _save_opportunity(opp: dict):
             outcome=opp["outcome"],
             current_price=opp["current_price"],
             claude_probability=opp.get("claude_probability"),
-            gemini_probability=opp.get("gemini_probability"),
             consensus_probability=opp["consensus_probability"],
             edge=opp["edge"],
             kelly_bet_usdc=opp["kelly_bet_usdc"],
             claude_reasoning=opp.get("claude_reasoning"),
-            gemini_reasoning=opp.get("gemini_reasoning"),
             confidence=opp["confidence"],
             status="pending",
             expires_at=datetime.utcnow() + timedelta(hours=6),
@@ -125,36 +119,27 @@ async def analyze_single_market(market: dict, scan_id: str):
     snapshot_id = await _save_snapshot(market, scan_id)
 
     t0 = time.monotonic()
-    claude_result, gemini_result = await asyncio.gather(
-        claude_analyze(market),
-        gemini_analyze(market),
-        return_exceptions=True,
-    )
-    total_ms = int((time.monotonic() - t0) * 1000)
+    claude_result = await claude_analyze(market)
+    latency_ms = int((time.monotonic() - t0) * 1000)
 
     if isinstance(claude_result, Exception):
         claude_result = {"success": False, "error": str(claude_result), "model": "claude-opus-4-6"}
-    if isinstance(gemini_result, Exception):
-        gemini_result = {"success": False, "error": str(gemini_result), "model": "gemini-1.5-pro"}
 
-    await asyncio.gather(
-        _save_ai_analysis(market["id"], snapshot_id, scan_id, claude_result, total_ms // 2),
-        _save_ai_analysis(market["id"], snapshot_id, scan_id, gemini_result, total_ms // 2),
-    )
+    await _save_ai_analysis(market["id"], snapshot_id, scan_id, claude_result, latency_ms)
 
-    consensus = calculate_consensus(claude_result, gemini_result)
-    if not consensus.get("success"):
+    if not claude_result.get("success") or claude_result.get("probability_yes") is None:
         return None
 
-    consensus_prob = consensus["probability"]
-    edge_yes = consensus_prob - market["yes_price"]
+    prob = claude_result["probability_yes"]
+    confidence = claude_result.get("confidence", "LOW")
 
+    edge_yes = prob - market["yes_price"]
     outcome = "YES" if edge_yes >= 0 else "NO"
     bet_price = market["yes_price"] if outcome == "YES" else market["no_price"]
-    bet_prob = consensus_prob if outcome == "YES" else 1 - consensus_prob
+    bet_prob = prob if outcome == "YES" else 1 - prob
     edge = abs(edge_yes)
 
-    conf_mult = confidence_multiplier(consensus["confidence"])
+    conf_mult = confidence_multiplier(confidence)
     kelly = kelly_bet(
         probability=bet_prob,
         market_price=bet_price,
@@ -173,18 +158,14 @@ async def analyze_single_market(market: dict, scan_id: str):
         "yes_price": market["yes_price"],
         "no_price": market["no_price"],
         "current_price": bet_price,
-        "claude_probability": claude_result.get("probability_yes"),
-        "gemini_probability": gemini_result.get("probability_yes"),
-        "consensus_probability": consensus_prob,
-        "claude_confidence": claude_result.get("confidence"),
-        "gemini_confidence": gemini_result.get("confidence"),
-        "confidence": consensus["confidence"],
-        "agreement": consensus.get("agreement"),
+        "claude_probability": prob,
+        "consensus_probability": prob,
+        "claude_confidence": confidence,
+        "confidence": confidence,
         "edge": edge,
         "kelly_bet_usdc": kelly["bet_usdc"],
         "kelly_details": kelly,
         "claude_reasoning": claude_result.get("reasoning", ""),
-        "gemini_reasoning": gemini_result.get("reasoning", ""),
         "yes_token_id": market.get("yes_token_id"),
         "no_token_id": market.get("no_token_id"),
         "is_profitable": is_profitable,
@@ -251,7 +232,7 @@ async def run_scan() -> list[dict]:
         markets = await get_active_markets(limit=50)
         logger.info(f"[scan:{scan_id[:8]}] {len(markets)} markets fetched")
 
-        sem = asyncio.Semaphore(5)
+        sem = asyncio.Semaphore(3)  # Limit concurrent Claude calls
 
         async def safe(m):
             nonlocal errors
