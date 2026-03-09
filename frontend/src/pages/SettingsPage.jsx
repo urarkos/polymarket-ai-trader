@@ -1,0 +1,162 @@
+import { useEffect, useState } from 'react'
+import { api } from '../api'
+import { Card } from '../components/Card'
+import { Shield, AlertTriangle, Save } from 'lucide-react'
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState(null)
+  const [form, setForm] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    api.getSettings().then((s) => {
+      setSettings(s)
+      setForm(s)
+    })
+  }, [])
+
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  async function save() {
+    setSaving(true)
+    try {
+      await api.updateSettings(form)
+      setSettings(form)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      alert(`Save failed: ${e.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!settings) return <div className="p-6 text-gray-500">Loading settings...</div>
+
+  return (
+    <div className="p-6 max-w-2xl space-y-6">
+      <h1 className="text-2xl font-bold text-white">Settings</h1>
+
+      {/* Risk warning */}
+      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex gap-3">
+        <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-yellow-200">
+          <p className="font-semibold">Risk Warning</p>
+          <p className="mt-1 text-yellow-300/80">
+            Automated betting involves financial risk. Start with small amounts and test
+            in simulation mode before enabling auto-bet with real funds.
+          </p>
+        </div>
+      </div>
+
+      {/* Auto-bet toggle */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Shield className={`w-5 h-5 ${form.auto_bet_enabled ? 'text-green-400' : 'text-gray-500'}`} />
+              <h2 className="font-semibold text-white">Auto-Bet</h2>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              When enabled, the bot automatically places bets without your confirmation.
+            </p>
+          </div>
+          <button
+            onClick={() => set('auto_bet_enabled', !form.auto_bet_enabled)}
+            className={`relative w-12 h-6 rounded-full transition-colors ${
+              form.auto_bet_enabled ? 'bg-green-500' : 'bg-gray-700'
+            }`}
+          >
+            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+              form.auto_bet_enabled ? 'left-7' : 'left-1'
+            }`} />
+          </button>
+        </div>
+      </Card>
+
+      {/* Trading parameters */}
+      <Card className="space-y-5">
+        <h2 className="font-semibold text-white">Trading Parameters</h2>
+
+        <NumberField
+          label="Bankroll (USDC)"
+          help="Total capital used for Kelly criterion calculations"
+          value={form.bankroll_usdc}
+          onChange={(v) => set('bankroll_usdc', v)}
+          min={10} max={100000} step={10}
+        />
+
+        <NumberField
+          label="Max Bet per Trade (USDC)"
+          help="Hard cap on any single bet regardless of Kelly output"
+          value={form.max_bet_usdc}
+          onChange={(v) => set('max_bet_usdc', v)}
+          min={1} max={10000} step={1}
+        />
+
+        <NumberField
+          label="Minimum Edge (%)"
+          help="Skip markets where AI edge is smaller than this threshold"
+          value={form.min_edge * 100}
+          onChange={(v) => set('min_edge', v / 100)}
+          min={1} max={50} step={0.5}
+          suffix="%"
+        />
+
+        <NumberField
+          label="Kelly Fraction (%)"
+          help="Fraction of full Kelly to use. 25% is standard conservative sizing."
+          value={form.kelly_fraction * 100}
+          onChange={(v) => set('kelly_fraction', v / 100)}
+          min={5} max={100} step={5}
+          suffix="%"
+        />
+
+        <NumberField
+          label="Scan Interval (minutes)"
+          help="How often to automatically scan markets for opportunities"
+          value={form.scan_interval_minutes}
+          onChange={(v) => set('scan_interval_minutes', v)}
+          min={5} max={1440} step={5}
+          suffix="min"
+        />
+      </Card>
+
+      {/* Save */}
+      <div className="flex justify-end">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
+        >
+          <Save className="w-4 h-4" />
+          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Settings'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function NumberField({ label, help, value, onChange, min, max, step, suffix }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-300">{label}</label>
+      {help && <p className="text-xs text-gray-500 mt-0.5">{help}</p>}
+      <div className="flex items-center gap-2 mt-2">
+        <input
+          type="number"
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="w-36 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500"
+        />
+        {suffix && <span className="text-gray-500 text-sm">{suffix}</span>}
+      </div>
+    </div>
+  )
+}
