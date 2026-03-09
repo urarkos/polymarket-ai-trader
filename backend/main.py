@@ -1,4 +1,6 @@
 import logging
+import os
+import uvicorn
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -77,7 +79,6 @@ async def health():
 
 
 # Serve React frontend (after build)
-import os
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.exists(FRONTEND_DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
@@ -85,3 +86,8 @@ if os.path.exists(FRONTEND_DIST):
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

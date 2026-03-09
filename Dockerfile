@@ -24,6 +24,4 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 WORKDIR /app/backend
 EXPOSE 8000
-# Use start script for reliable PORT expansion
-COPY --chmod=755 start.sh ./start.sh
-CMD ["./start.sh"]
+CMD ["python", "main.py"]
