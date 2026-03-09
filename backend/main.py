@@ -3,10 +3,10 @@ import os
 import uvicorn
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from database import init_db
@@ -58,8 +58,19 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-App-Password"],
 )
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    pwd = settings.app_password
+    # Only protect /api/* routes; skip /api/health (used by Railway healthcheck)
+    if pwd and request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        provided = request.headers.get("X-App-Password", "")
+        if provided != pwd:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    return await call_next(request)
 
 # API routes
 app.include_router(markets.router)

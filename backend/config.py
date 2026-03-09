@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     auto_bet_enabled: bool = False
     scan_interval_minutes: int = 15
 
+    # Auth
+    app_password: Optional[str] = None  # If set, all /api/* routes require X-App-Password header
+
     # DB
     database_url: str = "sqlite+aiosqlite:///./polymarket.db"
 

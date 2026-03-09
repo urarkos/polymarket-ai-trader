@@ -1,9 +1,12 @@
+import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
-import { LayoutDashboard, TrendingUp, History, Settings, Zap } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, History, Settings, Zap, LogOut } from 'lucide-react'
+import { auth } from './api'
 import Dashboard from './pages/Dashboard'
 import Opportunities from './pages/Opportunities'
 import BetHistory from './pages/BetHistory'
 import SettingsPage from './pages/SettingsPage'
+import LoginPage from './pages/LoginPage'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -13,6 +16,18 @@ const navItems = [
 ]
 
 export default function App() {
+  const [loggedIn, setLoggedIn] = useState(!!auth.getPassword())
+
+  useEffect(() => {
+    const logout = () => setLoggedIn(false)
+    window.addEventListener('auth:logout', logout)
+    return () => window.removeEventListener('auth:logout', logout)
+  }, [])
+
+  if (!loggedIn) {
+    return <LoginPage onLogin={() => setLoggedIn(true)} />
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
@@ -45,8 +60,14 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-800">
-          <p className="text-xs text-gray-600">Polymarket AI Trader v1.0</p>
+        <div className="p-3 border-t border-gray-800">
+          <button
+            onClick={() => { auth.clear(); setLoggedIn(false) }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg text-sm transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
         </div>
       </aside>
 
