@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [opportunities, setOpportunities] = useState([])
   const [health, setHealth] = useState(null)
   const [scanning, setScanning] = useState(false)
+  const [stopping, setStopping] = useState(false)
   const [error, setError] = useState(null)
 
   async function load() {
@@ -30,22 +31,48 @@ export default function Dashboard() {
     }
   }
 
+  async function pollScanStatus() {
+    try {
+      const state = await api.getScanStatus()
+      setScanning(state.running)
+    } catch (_) {}
+  }
+
   async function handleScan() {
-    setScanning(true)
     try {
       await api.triggerScan()
-      await load()
+      setScanning(true)
+      setError(null)
+    } catch (e) {
+      if (e.message.includes('409')) {
+        setScanning(true)
+        setError(null)
+      } else {
+        setError(e.message)
+      }
+    }
+  }
+
+  async function handleStop() {
+    setStopping(true)
+    try {
+      await api.stopScan()
     } catch (e) {
       setError(e.message)
     } finally {
-      setScanning(false)
+      setStopping(false)
     }
   }
 
   useEffect(() => {
     load()
-    const interval = setInterval(load, 30000)
-    return () => clearInterval(interval)
+    pollScanStatus()
+    const dataInterval = setInterval(load, 30000)
+    const scanInterval = setInterval(pollScanStatus, 3000)
+    return () => {
+      clearInterval(dataInterval)
+      clearInterval(scanInterval)
+    }
   }, [])
 
   return (
@@ -62,14 +89,29 @@ export default function Dashboard() {
             {' · '}Scan every {health?.scan_interval_minutes || '—'} min
           </p>
         </div>
-        <button
-          onClick={handleScan}
-          disabled={scanning}
-          className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
-          {scanning ? 'Scanning...' : 'Scan Now'}
-        </button>
+        <div className="flex items-center gap-2">
+          {scanning && (
+            <button
+              onClick={handleStop}
+              disabled={stopping}
+              className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              {stopping ? 'Stopping...' : 'Stop'}
+            </button>
+          )}
+          <button
+            onClick={handleScan}
+            disabled={scanning}
+            className={`flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
+              scanning
+                ? 'bg-green-700 opacity-70 cursor-not-allowed'
+                : 'bg-green-500 hover:bg-green-600'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
+            {scanning ? 'Scanning...' : 'Scan Now'}
+          </button>
+        </div>
       </div>
 
       {error && (
