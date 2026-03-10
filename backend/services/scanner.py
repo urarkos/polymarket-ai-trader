@@ -303,8 +303,18 @@ async def run_scan() -> list[dict]:
                     _scan_state["processed"] += 1
 
         tasks = [asyncio.create_task(safe(m)) for m in markets]
+
+        # Poll for stop request and cancel tasks immediately when triggered
+        while not all(t.done() for t in tasks):
+            if _scan_state["stop_requested"]:
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                break
+            await asyncio.sleep(0.5)
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        results = [r for r in results if not isinstance(r, Exception)]
+        results = [r for r in results if r is not None and not isinstance(r, (Exception, BaseException))]
 
         stopped_early = _scan_state["stop_requested"]
 
