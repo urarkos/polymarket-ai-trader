@@ -283,7 +283,7 @@ async def run_scan() -> list[dict]:
         logger.info(f"[scan:{scan_id[:8]}] {len(markets)} markets fetched")
         _scan_state["total"] = len(markets)
 
-        sem = asyncio.Semaphore(5)
+        sem = asyncio.Semaphore(3)
 
         async def safe(m):
             nonlocal errors

@@ -6,11 +6,8 @@ logger = logging.getLogger(__name__)
 
 # Model priority list — try best available, fall back gracefully
 GEMINI_MODELS = [
-    "gemini-2.5-pro-preview-05-06",
-    "gemini-2.5-pro-preview-03-25",
-    "gemini-2.0-pro-exp",
     "gemini-2.0-flash",
-    "gemini-1.5-pro",
+    "gemini-2.0-flash-lite",
 ]
 
 ANALYSIS_PROMPT = """You are a world-class prediction market analyst and probabilistic forecaster.

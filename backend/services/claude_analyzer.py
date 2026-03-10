@@ -66,7 +66,7 @@ async def analyze_market(market: dict) -> dict:
     if not api_key:
         return {"success": False, "error": "Anthropic API key not configured"}
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = anthropic.AsyncAnthropic(api_key=api_key)
 
     prompt = ANALYSIS_PROMPT.format(
         question=market["question"],
@@ -79,57 +79,31 @@ async def analyze_market(market: dict) -> dict:
         liquidity=f"${market.get('liquidity', 0):,.0f}" if market.get("liquidity") else "N/A",
     )
 
-    # Try with extended thinking first (deeper reasoning), fall back without it
-    for use_thinking in (True, False):
-        try:
-            kwargs = dict(
-                model="claude-opus-4-6",
-                max_tokens=16000,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            if use_thinking:
-                kwargs["thinking"] = {"type": "enabled", "budget_tokens": 10000}
-                kwargs["betas"] = ["interleaved-thinking-2025-05-14"]
+    try:
+        message = await client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=16000,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
 
-            message = client.messages.create(**kwargs)
+        raw = message.content[0].text.strip() if message.content else ""
 
-            # Extract text content (skip thinking blocks)
-            raw = ""
-            for block in message.content:
-                if block.type == "text":
-                    raw = block.text.strip()
-                    break
+        # Strip markdown fences if present
+        if "```" in raw:
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
 
-            if not raw:
-                continue
+        result = json.loads(raw)
+        result["model"] = "claude-opus-4-6"
+        result["success"] = True
+        return result
 
-            # Strip markdown fences if present
-            if "```" in raw:
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                raw = raw.strip()
-
-            result = json.loads(raw)
-            result["model"] = "claude-opus-4-6"
-            result["extended_thinking"] = use_thinking
-            result["success"] = True
-            return result
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Claude returned invalid JSON: {e}\nRaw: {raw[:200]}")
-            if not use_thinking:
-                return {"success": False, "error": f"JSON parse error: {e}"}
-        except anthropic.BadRequestError:
-            # Model doesn't support extended thinking in this config, retry without
-            if use_thinking:
-                logger.warning("Extended thinking not available, retrying without")
-                continue
-            return {"success": False, "error": "Bad request to Anthropic API"}
-        except Exception as e:
-            logger.error(f"Claude analysis failed: {e}")
-            if not use_thinking:
-                return {"success": False, "error": str(e)}
-
-    return {"success": False, "error": "All Claude attempts failed"}
+    except json.JSONDecodeError as e:
+        logger.error(f"Claude returned invalid JSON: {e}\nRaw: {raw[:200]}")
+        return {"success": False, "error": f"JSON parse error: {e}"}
+    except Exception as e:
+        logger.error(f"Claude analysis failed: {e}")
+        return {"success": False, "error": str(e)}
