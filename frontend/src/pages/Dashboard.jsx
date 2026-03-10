@@ -57,8 +57,11 @@ export default function Dashboard() {
     setStopping(true)
     try {
       await api.stopScan()
+      setScanning(false)
     } catch (e) {
-      setError(e.message)
+      // 400 means scan already finished — treat as success
+      if (!e.message.includes('400')) setError(e.message)
+      setScanning(false)
     } finally {
       setStopping(false)
     }
