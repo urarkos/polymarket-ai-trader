@@ -2,9 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Card } from '../components/Card'
 import { ConfidenceBadge, StatusBadge } from '../components/Badge'
+import { Tooltip } from '../components/Card'
 import { ChevronDown, ChevronRight, RefreshCw, Square } from 'lucide-react'
 
 const STATUS_FILTERS = ['all', 'pending', 'executed', 'failed', 'skipped']
+const STATUS_LABELS = {
+  all: 'Все',
+  pending: 'Ожидание',
+  executed: 'Исполнено',
+  failed: 'Ошибка',
+  skipped: 'Пропущено',
+}
 
 export default function Opportunities() {
   const [opps, setOpps] = useState([])
@@ -63,7 +71,7 @@ export default function Opportunities() {
       startPolling()
     } catch (e) {
       setScanning(false)
-      alert(`Failed to start scan: ${e.message}`)
+      alert(`Не удалось запустить сканирование: ${e.message}`)
     }
   }
 
@@ -73,7 +81,7 @@ export default function Opportunities() {
       await api.stopScan()
     } catch (e) {
       setStopping(false)
-      alert(`Failed to stop: ${e.message}`)
+      alert(`Не удалось остановить: ${e.message}`)
     }
   }
 
@@ -94,7 +102,7 @@ export default function Opportunities() {
       await api.placeBet(id)
       await load()
     } catch (e) {
-      alert(`Failed: ${e.message}`)
+      alert(`Ошибка: ${e.message}`)
     }
   }
 
@@ -104,7 +112,7 @@ export default function Opportunities() {
     <div className="p-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-white">Opportunities</h1>
+        <h1 className="text-2xl font-bold text-white">Сигналы</h1>
         <div className="flex items-center gap-3">
           {/* Filter */}
           <div className="flex bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
@@ -112,13 +120,13 @@ export default function Opportunities() {
               <button
                 key={s}
                 onClick={() => setFilter(s)}
-                className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   filter === s
                     ? 'bg-green-500 text-white'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                {s}
+                {STATUS_LABELS[s]}
               </button>
             ))}
           </div>
@@ -135,7 +143,7 @@ export default function Opportunities() {
                 className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
               >
                 <Square className="w-4 h-4" />
-                {stopping ? 'Stopping...' : 'Stop'}
+                {stopping ? 'Остановка...' : 'Стоп'}
               </button>
             </div>
           ) : (
@@ -144,19 +152,19 @@ export default function Opportunities() {
               className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg"
             >
               <RefreshCw className="w-4 h-4" />
-              Scan
+              Сканировать
             </button>
           )}
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-gray-500">Loading...</div>
+        <div className="text-center py-16 text-gray-500">Загрузка...</div>
       ) : opps.length === 0 ? (
         <Card>
           <div className="text-center py-12 text-gray-500">
-            <p>No opportunities found.</p>
-            <p className="text-xs mt-2">Try running a scan.</p>
+            <p>Сигналы не найдены.</p>
+            <p className="text-xs mt-2">Запустите сканирование.</p>
           </div>
         </Card>
       ) : (
@@ -179,22 +187,28 @@ export default function Opportunities() {
                         opp.outcome === 'YES'
                           ? 'bg-green-500/20 text-green-400'
                           : 'bg-red-500/20 text-red-400'
-                      }`}>{opp.outcome}</span>
+                      }`}>{opp.outcome === 'YES' ? 'ДА' : 'НЕТ'}</span>
                       <ConfidenceBadge level={opp.confidence} />
                       <StatusBadge status={opp.status} />
-                      <span className="text-xs text-gray-400">
-                        Edge <span className="text-green-400 font-semibold">{(opp.edge * 100).toFixed(1)}%</span>
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        Kelly <span className="text-white font-semibold">${opp.kelly_bet_usdc}</span>
-                      </span>
+                      <Tooltip text="Разница между оценкой AI и ценой рынка — потенциальная прибыльность">
+                        <span className="text-xs text-gray-400 cursor-help">
+                          Перевес <span className="text-green-400 font-semibold">{(opp.edge * 100).toFixed(1)}%</span>
+                        </span>
+                      </Tooltip>
+                      <Tooltip text="Рекомендуемый размер ставки по критерию Келли с учётом банкролла и уверенности AI">
+                        <span className="text-xs text-gray-400 cursor-help">
+                          Ставка Kelly <span className="text-white font-semibold">${opp.kelly_bet_usdc}</span>
+                        </span>
+                      </Tooltip>
                     </div>
                   </div>
-                  <ProbabilityBar
-                    market={opp.current_price}
-                    consensus={opp.consensus_probability}
-                    outcome={opp.outcome}
-                  />
+                  <Tooltip text="Текущая цена рынка / консенсус-оценка AI">
+                    <ProbabilityBar
+                      market={opp.current_price}
+                      consensus={opp.consensus_probability}
+                      outcome={opp.outcome}
+                    />
+                  </Tooltip>
                 </div>
               </button>
 
@@ -203,7 +217,7 @@ export default function Opportunities() {
                 <div className="border-t border-gray-800 p-4 space-y-4">
                   {/* Probabilities */}
                   <div className="grid grid-cols-3 gap-4">
-                    <ProbBox label="Market Price" value={opp.current_price} color="text-gray-300" />
+                    <ProbBox label="Цена рынка" value={opp.current_price} color="text-gray-300" />
                     <ProbBox label="Claude" value={opp.claude_probability} color="text-blue-400" />
                     <ProbBox label="Gemini" value={opp.gemini_probability} color="text-purple-400" />
                   </div>
@@ -211,12 +225,12 @@ export default function Opportunities() {
                   {/* Reasoning */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-800/50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-blue-400 mb-2">Claude Analysis</p>
-                      <p className="text-xs text-gray-300 leading-relaxed">{opp.claude_reasoning || 'No reasoning provided'}</p>
+                      <p className="text-xs font-semibold text-blue-400 mb-2">Анализ Claude</p>
+                      <p className="text-xs text-gray-300 leading-relaxed">{opp.claude_reasoning || 'Аргументация отсутствует'}</p>
                     </div>
                     <div className="bg-gray-800/50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-purple-400 mb-2">Gemini Analysis</p>
-                      <p className="text-xs text-gray-300 leading-relaxed">{opp.gemini_reasoning || 'No reasoning provided'}</p>
+                      <p className="text-xs font-semibold text-purple-400 mb-2">Анализ Gemini</p>
+                      <p className="text-xs text-gray-300 leading-relaxed">{opp.gemini_reasoning || 'Аргументация отсутствует'}</p>
                     </div>
                   </div>
 
@@ -227,14 +241,14 @@ export default function Opportunities() {
                         onClick={() => placeBet(opp.id)}
                         className="bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
                       >
-                        Place Bet ${opp.kelly_bet_usdc}
+                        Поставить ${opp.kelly_bet_usdc}
                       </button>
                     </div>
                   )}
 
                   <p className="text-xs text-gray-600">
-                    Found: {new Date(opp.created_at).toLocaleString()} ·
-                    Expires: {opp.expires_at ? new Date(opp.expires_at).toLocaleString() : '—'}
+                    Найдено: {new Date(opp.created_at).toLocaleString('ru-RU')} ·
+                    Истекает: {opp.expires_at ? new Date(opp.expires_at).toLocaleString('ru-RU') : '—'}
                   </p>
                 </div>
               )}
@@ -263,7 +277,7 @@ function ProbabilityBar({ market, consensus, outcome }) {
 
   return (
     <div className="flex-shrink-0 text-right">
-      <p className="text-xs text-gray-500">Market / AI</p>
+      <p className="text-xs text-gray-500">Рынок / AI</p>
       <p className="text-sm font-bold text-white">
         {marketPct}% / <span className="text-green-400">{consensusPct ?? '—'}%</span>
       </p>

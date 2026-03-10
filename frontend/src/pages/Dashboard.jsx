@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { StatCard, Card } from '../components/Card'
 import { ConfidenceBadge } from '../components/Badge'
-import { RefreshCw, TrendingUp, DollarSign, Target, Activity } from 'lucide-react'
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts'
+import { RefreshCw, TrendingUp, Target } from 'lucide-react'
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
@@ -83,13 +80,13 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-white">Дашборд</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Auto-bet: {' '}
+            Авто-ставка:{' '}
             <span className={health?.auto_bet_enabled ? 'text-green-400' : 'text-yellow-400'}>
-              {health?.auto_bet_enabled ? 'ENABLED' : 'DISABLED'}
+              {health?.auto_bet_enabled ? 'ВКЛ' : 'ВЫКЛ'}
             </span>
-            {' · '}Scan every {health?.scan_interval_minutes || '—'} min
+            {' · '}Сканирование каждые {health?.scan_interval_minutes || '—'} мин
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -99,7 +96,7 @@ export default function Dashboard() {
               disabled={stopping}
               className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
-              {stopping ? 'Stopping...' : 'Stop'}
+              {stopping ? 'Остановка...' : 'Стоп'}
             </button>
           )}
           <button
@@ -112,7 +109,7 @@ export default function Dashboard() {
             }`}
           >
             <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
-            {scanning ? 'Scanning...' : 'Scan Now'}
+            {scanning ? 'Сканирование...' : 'Сканировать'}
           </button>
         </div>
       </div>
@@ -126,26 +123,30 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Total Bets"
+          label="Всего ставок"
           value={stats?.total_bets ?? '—'}
-          sub={`${stats?.won ?? 0}W / ${stats?.lost ?? 0}L`}
+          sub={`${stats?.won ?? 0} выиграно / ${stats?.lost ?? 0} проиграно`}
+          tooltip="Общее количество размещённых ставок за всё время"
         />
         <StatCard
-          label="Total P&L"
+          label="P&L"
           value={stats ? `$${stats.total_pnl_usdc >= 0 ? '+' : ''}${stats.total_pnl_usdc}` : '—'}
           color={stats?.total_pnl_usdc >= 0 ? 'text-green-400' : 'text-red-400'}
           sub={`ROI: ${stats?.roi_pct ?? 0}%`}
+          tooltip="Прибыль/убыток в USDC. ROI — доходность относительно суммарно вложенного"
         />
         <StatCard
-          label="Win Rate"
+          label="Винрейт"
           value={stats ? `${stats.win_rate}%` : '—'}
           color="text-blue-400"
-          sub={`${stats?.pending ?? 0} pending`}
+          sub={`${stats?.pending ?? 0} в ожидании`}
+          tooltip="Доля выигранных ставок от завершённых"
         />
         <StatCard
-          label="Total Staked"
+          label="В игре"
           value={stats ? `$${stats.total_staked_usdc}` : '—'}
           color="text-purple-400"
+          tooltip="Суммарный объём USDC, поставленный за всё время"
         />
       </div>
 
@@ -153,14 +154,14 @@ export default function Dashboard() {
       <Card>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-4 h-4 text-green-400" />
-          <h2 className="font-semibold text-white">Latest Opportunities</h2>
+          <h2 className="font-semibold text-white">Последние сигналы</h2>
         </div>
 
         {opportunities.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <Target className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>No opportunities found yet.</p>
-            <p className="text-xs mt-1">Click "Scan Now" to search for profitable bets.</p>
+            <p>Сигналов пока нет.</p>
+            <p className="text-xs mt-1">Нажмите «Сканировать» для поиска выгодных ставок.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -183,7 +184,7 @@ function OpportunityRow({ opp, onBet }) {
       await api.placeBet(opp.id)
       onBet()
     } catch (e) {
-      alert(`Bet failed: ${e.message}`)
+      alert(`Ошибка ставки: ${e.message}`)
     } finally {
       setPlacing(false)
     }
@@ -200,13 +201,13 @@ function OpportunityRow({ opp, onBet }) {
                 ? 'bg-green-500/20 text-green-400'
                 : 'bg-red-500/20 text-red-400'
             }`}>
-              {opp.outcome}
+              {opp.outcome === 'YES' ? 'ДА' : 'НЕТ'}
             </span>
             <span className="text-xs text-gray-400">
-              Edge: <span className="text-green-400 font-semibold">{(opp.edge * 100).toFixed(1)}%</span>
+              Перевес: <span className="text-green-400 font-semibold">{(opp.edge * 100).toFixed(1)}%</span>
             </span>
             <span className="text-xs text-gray-400">
-              Bet: <span className="text-white font-semibold">${opp.kelly_bet_usdc}</span>
+              Ставка: <span className="text-white font-semibold">${opp.kelly_bet_usdc}</span>
             </span>
             <ConfidenceBadge level={opp.confidence} />
           </div>
@@ -220,7 +221,7 @@ function OpportunityRow({ opp, onBet }) {
           disabled={placing}
           className="flex-shrink-0 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
         >
-          {placing ? '...' : 'Bet'}
+          {placing ? '...' : 'Ставка'}
         </button>
       </div>
     </div>

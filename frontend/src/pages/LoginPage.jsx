@@ -18,14 +18,14 @@ export default function LoginPage({ onLogin }) {
         headers: { 'X-App-Password': password },
       })
       if (res.status === 401) {
-        setError('Wrong password')
+        setError('Неверный пароль')
         return
       }
       if (!res.ok) throw new Error(res.status)
       auth.setPassword(password)
       onLogin()
     } catch (e) {
-      if (e.message !== 'Wrong password') setError('Connection error')
+      if (e.message !== 'Неверный пароль') setError('Ошибка подключения')
     } finally {
       setLoading(false)
     }
@@ -40,7 +40,7 @@ export default function LoginPage({ onLogin }) {
             <Zap className="w-7 h-7 text-green-400" />
           </div>
           <h1 className="text-2xl font-bold text-white">PolyAI Trader</h1>
-          <p className="text-gray-500 text-sm mt-1">Enter your password to continue</p>
+          <p className="text-gray-500 text-sm mt-1">Введите пароль для входа</p>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
@@ -50,7 +50,7 @@ export default function LoginPage({ onLogin }) {
               type="password"
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError('') }}
-              placeholder="Password"
+              placeholder="Пароль"
               autoFocus
               className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 pl-10 text-white placeholder-gray-600 focus:outline-none focus:border-green-500 transition-colors"
             />
@@ -65,7 +65,7 @@ export default function LoginPage({ onLogin }) {
             disabled={loading || !password.trim()}
             className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
           >
-            {loading ? 'Verifying...' : 'Sign In'}
+            {loading ? 'Проверка...' : 'Войти'}
           </button>
         </form>
       </div>

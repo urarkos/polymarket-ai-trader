@@ -15,12 +15,13 @@ export function Badge({ children, variant = 'default' }) {
 }
 
 export function ConfidenceBadge({ level }) {
-  const map = { HIGH: 'green', MEDIUM: 'yellow', LOW: 'red' }
-  return <Badge variant={map[level] || 'default'}>{level}</Badge>
+  const colorMap = { HIGH: 'green', MEDIUM: 'yellow', LOW: 'red' }
+  const labelMap = { HIGH: 'Высокая', MEDIUM: 'Средняя', LOW: 'Низкая' }
+  return <Badge variant={colorMap[level] || 'default'}>{labelMap[level] || level}</Badge>
 }
 
 export function StatusBadge({ status }) {
-  const map = {
+  const colorMap = {
     pending:  'yellow',
     executed: 'green',
     failed:   'red',
@@ -29,5 +30,14 @@ export function StatusBadge({ status }) {
     won:      'green',
     lost:     'red',
   }
-  return <Badge variant={map[status] || 'default'}>{status}</Badge>
+  const labelMap = {
+    pending:  'Ожидание',
+    executed: 'Исполнено',
+    failed:   'Ошибка',
+    skipped:  'Пропущено',
+    placed:   'Размещено',
+    won:      'Выиграно',
+    lost:     'Проиграно',
+  }
+  return <Badge variant={colorMap[status] || 'default'}>{labelMap[status] || status}</Badge>
 }

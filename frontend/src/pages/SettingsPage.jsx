@@ -41,7 +41,7 @@ export default function SettingsPage() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      alert('Save failed: ' + e.message)
+      alert('Ошибка сохранения: ' + e.message)
     } finally {
       setSaving(false)
     }
@@ -63,7 +63,7 @@ export default function SettingsPage() {
       setSavedKeys(true)
       setTimeout(() => setSavedKeys(false), 2500)
     } catch (e) {
-      alert('Failed to save keys: ' + e.message)
+      alert('Ошибка сохранения ключей: ' + e.message)
     } finally {
       setSavingKeys(false)
     }
@@ -82,25 +82,25 @@ export default function SettingsPage() {
     }
   }
 
-  if (!settings) return <div className="p-6 text-gray-500">Loading settings...</div>
+  if (!settings) return <div className="p-6 text-gray-500">Загрузка настроек...</div>
 
   const KEY_FIELDS = [
-    { name: 'anthropic_api_key', label: 'Anthropic API Key', placeholder: 'sk-ant-...' },
+    { name: 'anthropic_api_key', label: 'Anthropic API Key (Claude)', placeholder: 'sk-ant-...' },
     { name: 'gemini_api_key', label: 'Gemini API Key', placeholder: 'AIza...' },
-    { name: 'polymarket_private_key', label: 'Polymarket Private Key', placeholder: '0x...' },
+    { name: 'polymarket_private_key', label: 'Polymarket — приватный ключ', placeholder: '0x...' },
   ]
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold text-white">Settings</h1>
+      <h1 className="text-2xl font-bold text-white">Настройки</h1>
 
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex gap-3">
         <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-yellow-200">
-          <p className="font-semibold">Risk Warning</p>
+          <p className="font-semibold">Предупреждение о рисках</p>
           <p className="mt-1 text-yellow-300/80">
-            Automated betting involves financial risk. Start with small amounts and test
-            in simulation mode before enabling auto-bet with real funds.
+            Автоматические ставки несут финансовые риски. Начинайте с малых сумм
+            и тестируйте без реальных средств, прежде чем включать авто-ставку.
           </p>
         </div>
       </div>
@@ -109,10 +109,10 @@ export default function SettingsPage() {
       <Card className="space-y-5">
         <div className="flex items-center gap-2">
           <Key className="w-5 h-5 text-blue-400" />
-          <h2 className="font-semibold text-white">API Keys</h2>
+          <h2 className="font-semibold text-white">API Ключи</h2>
         </div>
         <p className="text-xs text-gray-500 -mt-2">
-          Keys are stored securely in the database. Leave blank to keep the existing value.
+          Ключи хранятся в базе данных. Оставьте поле пустым, чтобы сохранить текущее значение.
         </p>
 
         {KEY_FIELDS.map(({ name, label, placeholder }) => (
@@ -134,7 +134,7 @@ export default function SettingsPage() {
           <div className="text-xs">
             {savedKeys && (
               <span className="flex items-center gap-1 text-green-400">
-                <CheckCircle className="w-3.5 h-3.5" /> Keys saved successfully
+                <CheckCircle className="w-3.5 h-3.5" /> Ключи сохранены
               </span>
             )}
           </div>
@@ -144,7 +144,7 @@ export default function SettingsPage() {
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
           >
             <Save className="w-4 h-4" />
-            {savingKeys ? 'Saving...' : 'Save Keys'}
+            {savingKeys ? 'Сохранение...' : 'Сохранить ключи'}
           </button>
         </div>
       </Card>
@@ -155,10 +155,10 @@ export default function SettingsPage() {
           <div>
             <div className="flex items-center gap-2">
               <Shield className={"w-5 h-5 " + (form.auto_bet_enabled ? 'text-green-400' : 'text-gray-500')} />
-              <h2 className="font-semibold text-white">Auto-Bet</h2>
+              <h2 className="font-semibold text-white">Авто-ставка</h2>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              When enabled, the bot automatically places bets without your confirmation.
+              При включении бот автоматически размещает ставки без вашего подтверждения.
             </p>
           </div>
           <button
@@ -172,26 +172,26 @@ export default function SettingsPage() {
 
       {/* Trading parameters */}
       <Card className="space-y-5">
-        <h2 className="font-semibold text-white">Trading Parameters</h2>
-        <NumberField label="Bankroll (USDC)" help="Total capital used for Kelly criterion calculations"
+        <h2 className="font-semibold text-white">Параметры торговли</h2>
+        <NumberField label="Банкролл (USDC)" help="Общий капитал, используемый для расчёта ставок по критерию Келли"
           value={form.bankroll_usdc} onChange={(v) => set('bankroll_usdc', v)} min={10} max={100000} step={10} />
-        <NumberField label="Max Bet per Trade (USDC)" help="Hard cap on any single bet regardless of Kelly output"
+        <NumberField label="Макс. ставка за сделку (USDC)" help="Жёсткий лимит на одну ставку вне зависимости от расчёта Келли"
           value={form.max_bet_usdc} onChange={(v) => set('max_bet_usdc', v)} min={1} max={10000} step={1} />
-        <NumberField label="Minimum Edge (%)" help="Skip markets where AI edge is smaller than this threshold"
+        <NumberField label="Минимальный перевес (%)" help="Рынки с меньшим перевесом AI пропускаются. Повышайте, чтобы торговать только на высоких перевесах"
           value={form.min_edge * 100} onChange={(v) => set('min_edge', v / 100)} min={1} max={50} step={0.5} suffix="%" />
-        <NumberField label="Kelly Fraction (%)" help="Fraction of full Kelly to use. 25% is standard conservative sizing."
+        <NumberField label="Доля Келли (%)" help="Какую долю от полного размера Келли использовать. 25% — стандартный консервативный подход"
           value={form.kelly_fraction * 100} onChange={(v) => set('kelly_fraction', v / 100)} min={5} max={100} step={5} suffix="%" />
-        <NumberField label="Scan Interval (minutes)" help="How often to automatically scan markets for opportunities"
-          value={form.scan_interval_minutes} onChange={(v) => set('scan_interval_minutes', v)} min={5} max={1440} step={5} suffix="min" />
-        <NumberField label="Markets per Scan" help="How many top markets (by 24h volume) to analyze each scan. More = better coverage but slower and more expensive."
-          value={form.scan_markets_limit} onChange={(v) => set('scan_markets_limit', v)} min={10} max={500} step={10} suffix="markets" />
+        <NumberField label="Интервал сканирования (мин)" help="Как часто автоматически сканировать рынки в поисках сигналов"
+          value={form.scan_interval_minutes} onChange={(v) => set('scan_interval_minutes', v)} min={5} max={1440} step={5} suffix="мин" />
+        <NumberField label="Рынков за сканирование" help="Сколько топ-рынков (по объёму 24ч) анализировать за один скан. Больше — шире охват, но медленнее и дороже"
+          value={form.scan_markets_limit} onChange={(v) => set('scan_markets_limit', v)} min={10} max={500} step={10} suffix="рынков" />
       </Card>
 
       <div className="flex justify-end">
         <button onClick={save} disabled={saving}
           className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-medium px-6 py-2.5 rounded-lg transition-colors">
           <Save className="w-4 h-4" />
-          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Settings'}
+          {saving ? 'Сохранение...' : saved ? 'Сохранено!' : 'Сохранить'}
         </button>
       </div>
     </div>
@@ -206,7 +206,7 @@ function KeyField({ label, placeholder, current, value, show, testResult, onTogg
     <div>
       <label className="block text-sm font-medium text-gray-300">{label}</label>
       {current && (
-        <p className="text-xs text-gray-500 mt-0.5 font-mono">Current: {current}</p>
+        <p className="text-xs text-gray-500 mt-0.5 font-mono">Текущий: {current}</p>
       )}
       <div className="flex items-center gap-2 mt-1.5">
         <div className="relative flex-1">
@@ -214,7 +214,7 @@ function KeyField({ label, placeholder, current, value, show, testResult, onTogg
             type={show ? 'text' : 'password'}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={current ? 'Enter new value to replace...' : placeholder}
+            placeholder={current ? 'Введите новое значение для замены...' : placeholder}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 pr-10 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500"
           />
           <button type="button" onClick={onToggleShow}
@@ -226,13 +226,13 @@ function KeyField({ label, placeholder, current, value, show, testResult, onTogg
           type="button"
           onClick={onTest}
           disabled={!canTest || tr.status === 'testing'}
-          title={canTest ? 'Test this key' : 'Save a key first'}
+          title={canTest ? 'Проверить ключ' : 'Сначала сохраните ключ'}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-40 transition-colors flex-shrink-0"
         >
           {tr.status === 'testing'
             ? <Loader className="w-4 h-4 animate-spin" />
             : <FlaskConical className="w-4 h-4" />}
-          Test
+          Тест
         </button>
       </div>
       {tr.status === 'ok' && (
