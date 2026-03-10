@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { StatCard, Card } from '../components/Card'
-import { ConfidenceBadge } from '../components/Badge'
+import { ConfidenceBadge, OutcomeBadge } from '../components/Badge'
 import { RefreshCw, TrendingUp, Target } from 'lucide-react'
 
 export default function Dashboard() {
@@ -196,13 +196,7 @@ function OpportunityRow({ opp, onBet }) {
         <div className="flex-1 min-w-0">
           <p className="text-sm text-white font-medium truncate">{opp.question}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-              opp.outcome === 'YES'
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-red-500/20 text-red-400'
-            }`}>
-              {opp.outcome === 'YES' ? 'ДА' : 'НЕТ'}
-            </span>
+            <OutcomeBadge outcome={opp.outcome} />
             <span className="text-xs text-gray-400">
               Перевес: <span className="text-green-400 font-semibold">{(opp.edge * 100).toFixed(1)}%</span>
             </span>

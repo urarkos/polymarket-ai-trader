@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Card } from '../components/Card'
-import { ConfidenceBadge, StatusBadge } from '../components/Badge'
+import { ConfidenceBadge, StatusBadge, OutcomeBadge } from '../components/Badge'
 import { Tooltip } from '../components/Card'
 import { ChevronDown, ChevronRight, RefreshCw, Square } from 'lucide-react'
 
@@ -183,11 +183,7 @@ export default function Opportunities() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white font-medium">{opp.question}</p>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                        opp.outcome === 'YES'
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-red-500/20 text-red-400'
-                      }`}>{opp.outcome === 'YES' ? 'ДА' : 'НЕТ'}</span>
+                      <OutcomeBadge outcome={opp.outcome} />
                       <ConfidenceBadge level={opp.confidence} />
                       <StatusBadge status={opp.status} />
                       <Tooltip text="Разница между оценкой AI и ценой рынка — потенциальная прибыльность">
