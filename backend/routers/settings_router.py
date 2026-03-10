@@ -27,6 +27,7 @@ class SettingsUpdate(BaseModel):
     bankroll_usdc: float | None = None
     auto_bet_enabled: bool | None = None
     scan_interval_minutes: int | None = None
+    scan_markets_limit: int | None = None
 
 
 class KeysUpdate(BaseModel):
@@ -44,6 +45,7 @@ async def get_settings():
         "bankroll_usdc": settings.bankroll_usdc,
         "auto_bet_enabled": settings.auto_bet_enabled,
         "scan_interval_minutes": settings.scan_interval_minutes,
+        "scan_markets_limit": settings.scan_markets_limit,
     }
 
 
@@ -61,6 +63,8 @@ async def update_settings(data: SettingsUpdate):
         settings.auto_bet_enabled = data.auto_bet_enabled
     if data.scan_interval_minutes is not None:
         settings.scan_interval_minutes = data.scan_interval_minutes
+    if data.scan_markets_limit is not None:
+        settings.scan_markets_limit = data.scan_markets_limit
     return {"updated": True, **data.model_dump(exclude_none=True)}
 
 

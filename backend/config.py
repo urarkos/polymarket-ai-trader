@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     bankroll_usdc: float = 1000.0
     auto_bet_enabled: bool = False
     scan_interval_minutes: int = 15
+    scan_markets_limit: int = 50
 
     # Auth
     app_password: Optional[str] = None  # If set, all /api/* routes require X-App-Password header

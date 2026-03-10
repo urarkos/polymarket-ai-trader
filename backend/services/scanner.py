@@ -248,7 +248,7 @@ async def run_scan() -> list[dict]:
     opportunities_found = []
 
     try:
-        markets = await get_active_markets(limit=50)
+        markets = await get_active_markets(limit=settings.scan_markets_limit)
         logger.info(f"[scan:{scan_id[:8]}] {len(markets)} markets fetched")
 
         sem = asyncio.Semaphore(5)

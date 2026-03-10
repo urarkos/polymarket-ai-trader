@@ -183,6 +183,8 @@ export default function SettingsPage() {
           value={form.kelly_fraction * 100} onChange={(v) => set('kelly_fraction', v / 100)} min={5} max={100} step={5} suffix="%" />
         <NumberField label="Scan Interval (minutes)" help="How often to automatically scan markets for opportunities"
           value={form.scan_interval_minutes} onChange={(v) => set('scan_interval_minutes', v)} min={5} max={1440} step={5} suffix="min" />
+        <NumberField label="Markets per Scan" help="How many top markets (by 24h volume) to analyze each scan. More = better coverage but slower and more expensive."
+          value={form.scan_markets_limit} onChange={(v) => set('scan_markets_limit', v)} min={10} max={500} step={10} suffix="markets" />
       </Card>
 
       <div className="flex justify-end">
