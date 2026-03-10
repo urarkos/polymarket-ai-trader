@@ -11,23 +11,56 @@ CLOB_API = "https://clob.polymarket.com"
 
 async def get_active_markets(limit: int = 50, offset: int = 0) -> list[dict]:
     """Fetch active markets from Polymarket Gamma API."""
+    import json as _json
+
+    # Try different sort fields — Gamma API has changed over time
+    sort_attempts = [
+        {"order": "volume24hr", "ascending": "false"},
+        {"order": "volumeNum", "ascending": "false"},
+        {},
+    ]
+
+    markets = []
     async with httpx.AsyncClient(timeout=30) as client:
-        params = {
-            "active": "true",
-            "closed": "false",
-            "limit": limit,
-            "offset": offset,
-            "order": "volume24hr",
-            "ascending": "false",
-        }
-        resp = await client.get(f"{GAMMA_API}/markets", params=params)
-        resp.raise_for_status()
-        markets = resp.json()
+        for sort_params in sort_attempts:
+            params = {
+                "active": "true",
+                "closed": "false",
+                "limit": limit,
+                "offset": offset,
+                **sort_params,
+            }
+            try:
+                resp = await client.get(f"{GAMMA_API}/markets", params=params)
+                resp.raise_for_status()
+                data = resp.json()
+                # Gamma API may return a list or {"data": [...], ...}
+                if isinstance(data, list):
+                    markets = data
+                elif isinstance(data, dict):
+                    markets = data.get("data") or data.get("markets") or []
+                else:
+                    markets = []
+
+                if markets:
+                    logger.info(f"Gamma API returned {len(markets)} raw markets (sort={sort_params.get('order', 'default')})")
+                    break
+                logger.warning(f"Gamma API returned 0 markets with sort={sort_params.get('order', 'default')}, retrying...")
+            except Exception as e:
+                logger.warning(f"Gamma API request failed (sort={sort_params.get('order')}): {e}")
+                continue
+
+    if not markets:
+        logger.error("Gamma API returned 0 markets on all attempts")
+        return []
 
     result = []
+    skipped_no_binary = 0
+    skipped_bad_price = 0
+    skipped_parse_error = 0
+
     for m in markets:
         try:
-            import json as _json
             outcomes = m.get("outcomes", [])
             outcome_prices = m.get("outcomePrices", [])
             if isinstance(outcomes, str):
@@ -35,20 +68,26 @@ async def get_active_markets(limit: int = 50, offset: int = 0) -> list[dict]:
             if isinstance(outcome_prices, str):
                 outcome_prices = _json.loads(outcome_prices)
             clob_token_ids = m.get("clobTokenIds", [])
+            if isinstance(clob_token_ids, str):
+                clob_token_ids = _json.loads(clob_token_ids)
 
             # Find YES/NO indices
             yes_idx = next((i for i, o in enumerate(outcomes) if str(o).upper() == "YES"), None)
             no_idx = next((i for i, o in enumerate(outcomes) if str(o).upper() == "NO"), None)
 
             if yes_idx is None or no_idx is None:
+                skipped_no_binary += 1
                 continue
             if len(outcome_prices) <= max(yes_idx, no_idx):
+                skipped_no_binary += 1
                 continue
 
             yes_price = float(outcome_prices[yes_idx])
             no_price = float(outcome_prices[no_idx])
 
-            if yes_price <= 0 or yes_price >= 1:
+            # Allow prices very close to 0 or 1 (but not exactly resolved)
+            if yes_price < 0.01 or yes_price > 0.99:
+                skipped_bad_price += 1
                 continue
 
             yes_token_id = clob_token_ids[yes_idx] if len(clob_token_ids) > yes_idx else None
@@ -61,8 +100,8 @@ async def get_active_markets(limit: int = 50, offset: int = 0) -> list[dict]:
                 "category": m.get("groupItemTitle") or m.get("category", ""),
                 "yes_price": yes_price,
                 "no_price": no_price,
-                "volume_24h": float(m.get("volume24hr", 0)),
-                "liquidity": float(m.get("liquidity", 0)),
+                "volume_24h": float(m.get("volume24hr") or m.get("volume_24hr") or 0),
+                "liquidity": float(m.get("liquidity", 0) or 0),
                 "end_date": m.get("endDate"),
                 "yes_token_id": yes_token_id,
                 "no_token_id": no_token_id,
@@ -70,8 +109,13 @@ async def get_active_markets(limit: int = 50, offset: int = 0) -> list[dict]:
             })
         except Exception as e:
             logger.warning(f"Failed to parse market: {e}")
+            skipped_parse_error += 1
             continue
 
+    logger.info(
+        f"Market parsing: {len(result)} valid | "
+        f"skipped: {skipped_no_binary} non-binary, {skipped_bad_price} near-resolved, {skipped_parse_error} parse errors"
+    )
     return result
 
 

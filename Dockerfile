@@ -3,6 +3,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install
 COPY frontend/ .
+ARG CACHE_BUST=1
 RUN npm run build
 
 FROM python:3.12-slim
