@@ -27,22 +27,32 @@ async def get_active_markets(limit: int = 50, offset: int = 0) -> list[dict]:
     result = []
     for m in markets:
         try:
-            tokens = m.get("tokens", [])
-            if len(tokens) < 2:
+            import json as _json
+            outcomes = m.get("outcomes", [])
+            outcome_prices = m.get("outcomePrices", [])
+            if isinstance(outcomes, str):
+                outcomes = _json.loads(outcomes)
+            if isinstance(outcome_prices, str):
+                outcome_prices = _json.loads(outcome_prices)
+            clob_token_ids = m.get("clobTokenIds", [])
+
+            # Find YES/NO indices
+            yes_idx = next((i for i, o in enumerate(outcomes) if str(o).upper() == "YES"), None)
+            no_idx = next((i for i, o in enumerate(outcomes) if str(o).upper() == "NO"), None)
+
+            if yes_idx is None or no_idx is None:
+                continue
+            if len(outcome_prices) <= max(yes_idx, no_idx):
                 continue
 
-            # Find YES token price
-            yes_token = next((t for t in tokens if t.get("outcome", "").upper() == "YES"), None)
-            no_token = next((t for t in tokens if t.get("outcome", "").upper() == "NO"), None)
-
-            if not yes_token or not no_token:
-                continue
-
-            yes_price = float(yes_token.get("price", 0))
-            no_price = float(no_token.get("price", 0))
+            yes_price = float(outcome_prices[yes_idx])
+            no_price = float(outcome_prices[no_idx])
 
             if yes_price <= 0 or yes_price >= 1:
                 continue
+
+            yes_token_id = clob_token_ids[yes_idx] if len(clob_token_ids) > yes_idx else None
+            no_token_id = clob_token_ids[no_idx] if len(clob_token_ids) > no_idx else None
 
             result.append({
                 "id": m.get("conditionId") or m.get("id"),
@@ -54,9 +64,9 @@ async def get_active_markets(limit: int = 50, offset: int = 0) -> list[dict]:
                 "volume_24h": float(m.get("volume24hr", 0)),
                 "liquidity": float(m.get("liquidity", 0)),
                 "end_date": m.get("endDate"),
-                "yes_token_id": yes_token.get("token_id"),
-                "no_token_id": no_token.get("token_id"),
-                "clob_token_ids": m.get("clobTokenIds", []),
+                "yes_token_id": yes_token_id,
+                "no_token_id": no_token_id,
+                "clob_token_ids": clob_token_ids,
             })
         except Exception as e:
             logger.warning(f"Failed to parse market: {e}")
