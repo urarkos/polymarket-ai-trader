@@ -50,22 +50,31 @@ async def get_settings():
 
 
 @router.patch("")
-async def update_settings(data: SettingsUpdate):
-    if data.max_bet_usdc is not None:
-        settings.max_bet_usdc = data.max_bet_usdc
-    if data.min_edge is not None:
-        settings.min_edge = data.min_edge
-    if data.kelly_fraction is not None:
-        settings.kelly_fraction = data.kelly_fraction
-    if data.bankroll_usdc is not None:
-        settings.bankroll_usdc = data.bankroll_usdc
-    if data.auto_bet_enabled is not None:
-        settings.auto_bet_enabled = data.auto_bet_enabled
-    if data.scan_interval_minutes is not None:
-        settings.scan_interval_minutes = data.scan_interval_minutes
-    if data.scan_markets_limit is not None:
-        settings.scan_markets_limit = data.scan_markets_limit
-    return {"updated": True, **data.model_dump(exclude_none=True)}
+async def update_settings(data: SettingsUpdate, db: AsyncSession = Depends(get_db)):
+    from models import AppSecret
+
+    changed = data.model_dump(exclude_none=True)
+    for field, value in changed.items():
+        setattr(settings, field, value)
+        # Persist to DB so it survives restarts
+        existing = await db.get(AppSecret, field)
+        if existing:
+            existing.value = str(value)
+        else:
+            db.add(AppSecret(key=field, value=str(value)))
+    await db.commit()
+
+    # Reschedule APScheduler job if interval changed
+    if "scan_interval_minutes" in changed:
+        try:
+            import main as _main
+            _main.scheduler.reschedule_job(
+                "market_scan", trigger="interval", minutes=changed["scan_interval_minutes"]
+            )
+        except Exception:
+            pass
+
+    return {"updated": True, **changed}
 
 
 @router.get("/keys")

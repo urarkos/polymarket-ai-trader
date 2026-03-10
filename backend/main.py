@@ -23,17 +23,37 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
+_SETTINGS_FIELDS = {
+    "max_bet_usdc": float,
+    "min_edge": float,
+    "kelly_fraction": float,
+    "bankroll_usdc": float,
+    "auto_bet_enabled": lambda v: v.lower() == "true",
+    "scan_interval_minutes": int,
+    "scan_markets_limit": int,
+}
+_SECRET_FIELDS = {"anthropic_api_key", "gemini_api_key", "polymarket_private_key"}
+
+
 async def _load_secrets_from_db():
-    """Load API keys persisted in DB into the runtime secrets store."""
+    """Load API keys and persisted settings from DB into the runtime store."""
     from database import AsyncSessionLocal
     from models import AppSecret
     import config
+    loaded_secrets = 0
+    loaded_settings = 0
     async with AsyncSessionLocal() as db:
         from sqlalchemy import select
         result = await db.execute(select(AppSecret))
         for row in result.scalars().all():
-            config._secrets[row.key] = row.value
-    logger.info(f"Loaded {len(config._secrets)} secret(s) from DB")
+            if row.key in _SECRET_FIELDS:
+                config._secrets[row.key] = row.value
+                loaded_secrets += 1
+            elif row.key in _SETTINGS_FIELDS:
+                cast = _SETTINGS_FIELDS[row.key]
+                setattr(config.settings, row.key, cast(row.value))
+                loaded_settings += 1
+    logger.info(f"Loaded {loaded_secrets} secret(s) and {loaded_settings} setting(s) from DB")
 
 
 @asynccontextmanager
