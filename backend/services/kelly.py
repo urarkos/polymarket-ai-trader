@@ -90,10 +90,10 @@ def calculate_consensus(claude_result: dict, gemini_result: dict) -> dict:
         return {"success": False}
 
     if claude_prob is None:
-        return {"probability": gemini_prob, "confidence": gemini_conf, "source": "gemini_only"}
+        return {"success": True, "probability": gemini_prob, "confidence": gemini_conf, "source": "gemini_only"}
 
     if gemini_prob is None:
-        return {"probability": claude_prob, "confidence": claude_conf, "source": "claude_only"}
+        return {"success": True, "probability": claude_prob, "confidence": claude_conf, "source": "claude_only"}
 
     w_claude = weight_map.get(claude_conf, 1)
     w_gemini = weight_map.get(gemini_conf, 1)
