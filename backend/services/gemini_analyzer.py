@@ -87,7 +87,7 @@ async def analyze_market(market: dict) -> dict:
     for model_name in GEMINI_MODELS:
         try:
             model = genai.GenerativeModel(model_name)
-            response = model.generate_content(
+            response = await model.generate_content_async(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.2,
@@ -118,8 +118,12 @@ async def analyze_market(market: dict) -> dict:
             break  # Don't retry other models for parse errors
         except Exception as e:
             err = str(e)
-            if "not found" in err.lower() or "404" in err or "invalid" in err.lower():
+            if "not found" in err.lower() or "404" in err:
                 logger.info(f"Gemini model {model_name} not available, trying next")
+                last_error = err
+                continue
+            if "429" in err or "quota" in err.lower() or "resource_exhausted" in err.lower():
+                logger.warning(f"Gemini ({model_name}) rate limited, trying next model")
                 last_error = err
                 continue
             logger.error(f"Gemini ({model_name}) failed: {e}")

@@ -19,6 +19,24 @@ from models import MarketSnapshot, AIAnalysis, Signal, Opportunity, Bet, ScanRun
 
 logger = logging.getLogger(__name__)
 
+_scan_state: dict = {
+    "running": False,
+    "stop_requested": False,
+    "scan_id": None,
+    "total": 0,
+    "processed": 0,
+    "opportunities_found": 0,
+    "status": "idle",  # idle | running | stopped | completed | failed
+}
+
+
+def request_stop():
+    _scan_state["stop_requested"] = True
+
+
+def get_scan_state() -> dict:
+    return dict(_scan_state)
+
 
 async def _save_snapshot(market: dict, scan_id: str) -> str:
     snapshot_id = str(uuid.uuid4())
@@ -234,8 +252,20 @@ async def execute_bet(opportunity_id: str, opp: dict) -> dict:
 
 
 async def run_scan() -> list[dict]:
+    global _scan_state
+
     scan_id = str(uuid.uuid4())
     t_start = datetime.utcnow()
+
+    _scan_state.update({
+        "running": True,
+        "stop_requested": False,
+        "scan_id": scan_id,
+        "total": 0,
+        "processed": 0,
+        "opportunities_found": 0,
+        "status": "running",
+    })
 
     async with AsyncSessionLocal() as db:
         db.add(ScanRun(id=scan_id, status="running"))
@@ -246,24 +276,37 @@ async def run_scan() -> list[dict]:
     markets = []
     results = []
     opportunities_found = []
+    stopped_early = False
 
     try:
         markets = await get_active_markets(limit=settings.scan_markets_limit)
         logger.info(f"[scan:{scan_id[:8]}] {len(markets)} markets fetched")
+        _scan_state["total"] = len(markets)
 
         sem = asyncio.Semaphore(5)
 
         async def safe(m):
             nonlocal errors
+            if _scan_state["stop_requested"]:
+                return None
             async with sem:
+                if _scan_state["stop_requested"]:
+                    return None
                 try:
-                    return await analyze_single_market(m, scan_id)
+                    result = await analyze_single_market(m, scan_id)
+                    return result
                 except Exception as e:
                     logger.error(f"Error: {e}")
                     errors += 1
                     return None
+                finally:
+                    _scan_state["processed"] += 1
 
-        results = await asyncio.gather(*[safe(m) for m in markets])
+        tasks = [asyncio.create_task(safe(m)) for m in markets]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = [r for r in results if not isinstance(r, Exception)]
+
+        stopped_early = _scan_state["stop_requested"]
 
         for opp in results:
             if opp is None:
@@ -278,11 +321,10 @@ async def run_scan() -> list[dict]:
             if settings.auto_bet_enabled:
                 await execute_bet(record.id, opp)
 
-        status = "completed"
+        status = "stopped" if stopped_early else "completed"
     except Exception as e:
         logger.error(f"Scan failed: {e}")
         status = "failed"
-        raise
     finally:
         duration = (datetime.utcnow() - t_start).total_seconds()
         async with AsyncSessionLocal() as db:
@@ -299,5 +341,11 @@ async def run_scan() -> list[dict]:
                 run.finished_at = datetime.utcnow()
             await db.commit()
 
-    logger.info(f"[scan:{scan_id[:8]}] Done in {duration:.1f}s | opportunities={len(opportunities_found)}")
+        _scan_state.update({
+            "running": False,
+            "status": status,
+            "opportunities_found": len(opportunities_found),
+        })
+
+    logger.info(f"[scan:{scan_id[:8]}] {status} in {duration:.1f}s | opportunities={len(opportunities_found)}")
     return opportunities_found

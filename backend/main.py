@@ -23,11 +23,25 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
+async def _load_secrets_from_db():
+    """Load API keys persisted in DB into the runtime secrets store."""
+    from database import AsyncSessionLocal
+    from models import AppSecret
+    import config
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import select
+        result = await db.execute(select(AppSecret))
+        for row in result.scalars().all():
+            config._secrets[row.key] = row.value
+    logger.info(f"Loaded {len(config._secrets)} secret(s) from DB")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
     logger.info("Database initialized")
+    await _load_secrets_from_db()
 
     # Schedule periodic scan
     scheduler.add_job(

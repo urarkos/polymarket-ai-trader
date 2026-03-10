@@ -33,6 +33,8 @@ export const api = {
   getOpportunities: (status = '', limit = 50) =>
     req(`/opportunities?${status ? `status=${status}&` : ''}limit=${limit}`),
   triggerScan: () => req('/opportunities/scan', { method: 'POST' }),
+  stopScan: () => req('/opportunities/scan/stop', { method: 'POST' }),
+  getScanStatus: () => req('/opportunities/scan/status'),
   placeBet: (id) => req(`/opportunities/${id}/bet`, { method: 'POST' }),
 
   // Bets

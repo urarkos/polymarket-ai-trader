@@ -1,9 +1,10 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from database import get_db
 from models import Opportunity
-from services.scanner import run_scan, execute_bet
+from services.scanner import run_scan, execute_bet, request_stop, get_scan_state
 from config import settings
 
 router = APIRouter(prefix="/api/opportunities", tags=["opportunities"])
@@ -25,9 +26,28 @@ async def list_opportunities(
 
 @router.post("/scan")
 async def trigger_scan():
-    """Manually trigger a market scan."""
-    opps = await run_scan()
-    return {"scanned": True, "opportunities_found": len(opps)}
+    """Manually trigger a market scan (runs in background)."""
+    state = get_scan_state()
+    if state["running"]:
+        raise HTTPException(status_code=409, detail="Scan already running")
+    asyncio.create_task(run_scan())
+    return {"started": True}
+
+
+@router.get("/scan/status")
+async def scan_status():
+    """Return current scan state."""
+    return get_scan_state()
+
+
+@router.post("/scan/stop")
+async def stop_scan():
+    """Request the running scan to stop."""
+    state = get_scan_state()
+    if not state["running"]:
+        raise HTTPException(status_code=400, detail="No scan running")
+    request_stop()
+    return {"stopping": True}
 
 
 @router.post("/{opportunity_id}/bet")

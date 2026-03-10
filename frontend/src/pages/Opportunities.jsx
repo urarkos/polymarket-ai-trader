@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Card } from '../components/Card'
 import { ConfidenceBadge, StatusBadge } from '../components/Badge'
-import { ChevronDown, ChevronRight, RefreshCw, Filter } from 'lucide-react'
+import { ChevronDown, ChevronRight, RefreshCw, Square } from 'lucide-react'
 
 const STATUS_FILTERS = ['all', 'pending', 'executed', 'failed', 'skipped']
 
@@ -11,7 +11,10 @@ export default function Opportunities() {
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [scanProgress, setScanProgress] = useState(null)
+  const [stopping, setStopping] = useState(false)
   const [expanded, setExpanded] = useState(null)
+  const pollRef = useRef(null)
 
   async function load() {
     setLoading(true)
@@ -23,15 +26,68 @@ export default function Opportunities() {
     }
   }
 
-  async function scan() {
-    setScanning(true)
-    try {
-      await api.triggerScan()
-      await load()
-    } finally {
-      setScanning(false)
+  function startPolling() {
+    if (pollRef.current) return
+    pollRef.current = setInterval(async () => {
+      try {
+        const state = await api.getScanStatus()
+        setScanProgress({ processed: state.processed, total: state.total })
+        if (!state.running) {
+          stopPolling()
+          setScanning(false)
+          setStopping(false)
+          setScanProgress(null)
+          await load()
+        }
+      } catch {
+        stopPolling()
+        setScanning(false)
+        setStopping(false)
+        setScanProgress(null)
+      }
+    }, 1500)
+  }
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
     }
   }
+
+  async function scan() {
+    setScanning(true)
+    setScanProgress(null)
+    try {
+      await api.triggerScan()
+      startPolling()
+    } catch (e) {
+      setScanning(false)
+      alert(`Failed to start scan: ${e.message}`)
+    }
+  }
+
+  async function stopScan() {
+    setStopping(true)
+    try {
+      await api.stopScan()
+    } catch (e) {
+      setStopping(false)
+      alert(`Failed to stop: ${e.message}`)
+    }
+  }
+
+  useEffect(() => {
+    // Sync with any scan already running on mount
+    api.getScanStatus().then((state) => {
+      if (state.running) {
+        setScanning(true)
+        setScanProgress({ processed: state.processed, total: state.total })
+        startPolling()
+      }
+    }).catch(() => {})
+    return () => stopPolling()
+  }, [])
 
   async function placeBet(id) {
     try {
@@ -66,14 +122,31 @@ export default function Opportunities() {
               </button>
             ))}
           </div>
-          <button
-            onClick={scan}
-            disabled={scanning}
-            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
-          >
-            <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
-            {scanning ? 'Scanning...' : 'Scan'}
-          </button>
+          {scanning ? (
+            <div className="flex items-center gap-2">
+              {scanProgress && scanProgress.total > 0 && (
+                <span className="text-xs text-gray-400">
+                  {scanProgress.processed}/{scanProgress.total}
+                </span>
+              )}
+              <button
+                onClick={stopScan}
+                disabled={stopping}
+                className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+              >
+                <Square className="w-4 h-4" />
+                {stopping ? 'Stopping...' : 'Stop'}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={scan}
+              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Scan
+            </button>
+          )}
         </div>
       </div>
 
