@@ -1,4 +1,6 @@
 import { clsx } from 'clsx'
+import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 export function Card({ children, className }) {
   return (
@@ -23,12 +25,30 @@ export function StatCard({ label, value, sub, color = 'text-white', tooltip }) {
 }
 
 export function Tooltip({ children, text }) {
+  const [visible, setVisible] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const ref = useRef(null)
+
+  function show() {
+    if (!ref.current) return
+    const r = ref.current.getBoundingClientRect()
+    setPos({ top: r.top + window.scrollY - 8, left: r.left + r.width / 2 })
+    setVisible(true)
+  }
+
   return (
-    <span className="relative group inline-flex">
+    <span ref={ref} className="inline-flex" onMouseEnter={show} onMouseLeave={() => setVisible(false)}>
       {children}
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 whitespace-nowrap shadow-lg normal-case tracking-normal font-normal">
-        {text}
-      </span>
+      {visible && createPortal(
+        <span
+          style={{ top: pos.top, left: pos.left, transform: 'translate(-50%, -100%)' }}
+          className="fixed z-[9999] px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 pointer-events-none shadow-lg whitespace-nowrap normal-case tracking-normal font-normal"
+        >
+          {text}
+          <span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-gray-700" />
+        </span>,
+        document.body
+      )}
     </span>
   )
 }
