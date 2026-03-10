@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 GEMINI_MODELS = [
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
 ]
 
 ANALYSIS_PROMPT = """You are a world-class prediction market analyst and probabilistic forecaster.
